@@ -53,6 +53,7 @@ def make_slug(title, company, city):
     base = f"{title} {company} {city}"
     return slugify(base)[:100]
 
+# ─── FIXED: save_job with duplicate error handling ────────
 def save_job(job):
     try:
         existing = supabase.table("jobs_pakistan").select("id").eq("hash", job["hash"]).execute()
@@ -62,7 +63,10 @@ def save_job(job):
         supabase.table("jobs_pakistan").insert(job).execute()
         print(f"  ✅ Saved: {job['title']} @ {job['company']}")
     except Exception as e:
-        print(f"  ❌ Error: {e}")
+        if '23505' in str(e):
+            print(f"  ⏭ Duplicate: {job['title']}")
+        else:
+            print(f"  ❌ Error: {e}")
 
 def build_job(title, company, location, apply_url, source, job_type="fulltime", desc=""):
     return {
@@ -128,32 +132,37 @@ def scrape_mustakbil():
         print(f"❌ Mustakbil error: {e}")
 
 # ══════════════════════════════════════════════════════════
-# SCRAPER 3 — Internshala Pakistan
+# SCRAPER 3 — Internships via RSS (Rozee + Mustakbil)
 # ══════════════════════════════════════════════════════════
 def scrape_internshala():
-    print("\n🔍 Scraping Internshala...")
+    print("\n🔍 Scraping Internships from Rozee...")
     try:
-        url = "https://internshala.com/internships/pakistan-internships"
-        res = requests.get(url, headers=HEADERS, timeout=15)
-        soup = BeautifulSoup(res.text, "html.parser")
-        cards = soup.select(".internship_meta")
-        for card in cards[:25]:
-            try:
-                title = card.select_one(".profile h3")
-                company = card.select_one(".company_name")
-                location = card.select_one(".location_link")
-                link = card.select_one("a.view_internship_button")
-                title = title.text.strip() if title else ""
-                company = company.text.strip() if company else "Unknown"
-                location = location.text.strip() if location else "Pakistan"
-                apply_url = "https://internshala.com" + link["href"] if link else ""
-                if not title or not apply_url:
-                    continue
-                save_job(build_job(title, company, location, apply_url, "Internshala", "internship"))
-            except Exception as e:
-                print(f"  ⚠ Card error: {e}")
+        feed = feedparser.parse("https://www.rozee.pk/rss/internship-jobs")
+        for entry in feed.entries[:40]:
+            title = entry.get("title", "").strip()
+            company = entry.get("author", "Unknown").strip()
+            location = entry.get("tags", [{}])[0].get("term", "Pakistan") if entry.get("tags") else "Pakistan"
+            apply_url = entry.get("link", "")
+            desc = entry.get("summary", "")
+            if not title or not apply_url:
+                continue
+            save_job(build_job(title, company, location, apply_url, "Rozee Internships", "internship", desc))
     except Exception as e:
-        print(f"❌ Internshala error: {e}")
+        print(f"❌ Rozee internship error: {e}")
+
+    print("\n🔍 Scraping Internships from Mustakbil...")
+    try:
+        feed = feedparser.parse("https://mustakbil.com/internships/rss")
+        for entry in feed.entries[:40]:
+            title = entry.get("title", "").strip()
+            company = entry.get("author", "Unknown").strip()
+            apply_url = entry.get("link", "")
+            desc = entry.get("summary", "")
+            if not title or not apply_url:
+                continue
+            save_job(build_job(title, company, "Pakistan", apply_url, "Mustakbil Internships", "internship", desc))
+    except Exception as e:
+        print(f"❌ Mustakbil internship error: {e}")
 
 # ══════════════════════════════════════════════════════════
 # SCRAPER 4 — LinkedIn Public Pakistan
