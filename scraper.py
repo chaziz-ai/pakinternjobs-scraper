@@ -98,18 +98,22 @@ def expire_old_jobs():
 # SCRAPER 1 — Rozee.pk RSS
 # ══════════════════════════════════════════════════════════
 def scrape_rozee():
-    print("\n🔍 Scraping Rozee.pk...")
+    print("\n🔍 Scraping Rozee.pk via HTML...")
     try:
-        feed = feedparser.parse("https://www.rozee.pk/rss/jobs")
-        for entry in feed.entries[:40]:
-            title = entry.get("title", "").strip()
-            company = entry.get("author", "Unknown").strip()
-            location = entry.get("tags", [{}])[0].get("term", "Pakistan") if entry.get("tags") else "Pakistan"
-            apply_url = entry.get("link", "")
-            desc = entry.get("summary", "")
-            if not title or not apply_url:
-                continue
-            save_job(build_job(title, company, location, apply_url, "Rozee.pk", "fulltime", desc))
+        url = "https://www.rozee.pk/job/jsearch/q/all/fc/1"
+        res = requests.get(url, headers=HEADERS, timeout=15)
+        soup = BeautifulSoup(res.text, "html.parser")
+        cards = soup.select(".job-title-wrap, .r3, .jtitle")
+        for card in cards[:30]:
+            try:
+                title = card.select_one("a")
+                title_text = title.text.strip() if title else ""
+                apply_url = "https://www.rozee.pk" + title["href"] if title and title.get("href") else ""
+                if not title_text or not apply_url:
+                    continue
+                save_job(build_job(title_text, "Unknown", "Pakistan", apply_url, "Rozee.pk", "fulltime"))
+            except Exception as e:
+                print(f"  ⚠ Error: {e}")
     except Exception as e:
         print(f"❌ Rozee error: {e}")
 
@@ -135,32 +139,26 @@ def scrape_mustakbil():
 # SCRAPER 3 — Internships via RSS (Rozee + Mustakbil)
 # ══════════════════════════════════════════════════════════
 def scrape_internshala():
-    print("\n🔍 Scraping Internships from Rozee...")
+    print("\n🔍 Scraping Internships from Mustakbil HTML...")
     try:
-        feed = feedparser.parse("https://www.rozee.pk/rss/internship-jobs")
-        for entry in feed.entries[:40]:
-            title = entry.get("title", "").strip()
-            company = entry.get("author", "Unknown").strip()
-            location = entry.get("tags", [{}])[0].get("term", "Pakistan") if entry.get("tags") else "Pakistan"
-            apply_url = entry.get("link", "")
-            desc = entry.get("summary", "")
-            if not title or not apply_url:
-                continue
-            save_job(build_job(title, company, location, apply_url, "Rozee Internships", "internship", desc))
-    except Exception as e:
-        print(f"❌ Rozee internship error: {e}")
-
-    print("\n🔍 Scraping Internships from Mustakbil...")
-    try:
-        feed = feedparser.parse("https://mustakbil.com/internships/rss")
-        for entry in feed.entries[:40]:
-            title = entry.get("title", "").strip()
-            company = entry.get("author", "Unknown").strip()
-            apply_url = entry.get("link", "")
-            desc = entry.get("summary", "")
-            if not title or not apply_url:
-                continue
-            save_job(build_job(title, company, "Pakistan", apply_url, "Mustakbil Internships", "internship", desc))
+        url = "https://mustakbil.com/internships"
+        res = requests.get(url, headers=HEADERS, timeout=15)
+        soup = BeautifulSoup(res.text, "html.parser")
+        cards = soup.select(".job-item, .internship-item, .listing-item, article")
+        for card in cards[:30]:
+            try:
+                title = card.select_one("h2 a, h3 a, .title a, a.job-title")
+                company = card.select_one(".company, .employer, .company-name")
+                title_text = title.text.strip() if title else ""
+                company_text = company.text.strip() if company else "Unknown"
+                apply_url = title["href"] if title and title.get("href") else ""
+                if not apply_url.startswith("http"):
+                    apply_url = "https://mustakbil.com" + apply_url
+                if not title_text or not apply_url:
+                    continue
+                save_job(build_job(title_text, company_text, "Pakistan", apply_url, "Mustakbil Internships", "internship"))
+            except Exception as e:
+                print(f"  ⚠ Error: {e}")
     except Exception as e:
         print(f"❌ Mustakbil internship error: {e}")
 
