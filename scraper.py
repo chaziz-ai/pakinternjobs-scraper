@@ -139,28 +139,48 @@ def scrape_mustakbil():
 # SCRAPER 3 — Internships via RSS (Rozee + Mustakbil)
 # ══════════════════════════════════════════════════════════
 def scrape_internshala():
-    print("\n🔍 Scraping Internships from Mustakbil HTML...")
+    print("\n🔍 Scraping Internships from LinkedIn...")
     try:
-        url = "https://mustakbil.com/internships"
+        url = "https://www.linkedin.com/jobs/internship-jobs-in-pakistan/"
         res = requests.get(url, headers=HEADERS, timeout=15)
         soup = BeautifulSoup(res.text, "html.parser")
-        cards = soup.select(".job-item, .internship-item, .listing-item, article")
-        for card in cards[:30]:
+        cards = soup.select(".base-card")
+        for card in cards[:25]:
             try:
-                title = card.select_one("h2 a, h3 a, .title a, a.job-title")
-                company = card.select_one(".company, .employer, .company-name")
-                title_text = title.text.strip() if title else ""
-                company_text = company.text.strip() if company else "Unknown"
-                apply_url = title["href"] if title and title.get("href") else ""
-                if not apply_url.startswith("http"):
-                    apply_url = "https://mustakbil.com" + apply_url
-                if not title_text or not apply_url:
+                title = card.select_one(".base-search-card__title")
+                company = card.select_one(".base-search-card__subtitle")
+                location = card.select_one(".job-search-card__location")
+                link = card.select_one("a.base-card__full-link")
+                title = title.text.strip() if title else ""
+                company = company.text.strip() if company else "Unknown"
+                location = location.text.strip() if location else "Pakistan"
+                apply_url = link["href"] if link else ""
+                if not title or not apply_url:
                     continue
-                save_job(build_job(title_text, company_text, "Pakistan", apply_url, "Mustakbil Internships", "internship"))
+                save_job(build_job(title, company, location, apply_url, "LinkedIn Internships", "internship"))
             except Exception as e:
                 print(f"  ⚠ Error: {e}")
     except Exception as e:
-        print(f"❌ Mustakbil internship error: {e}")
+        print(f"❌ Internship error: {e}")
+
+    print("\n🔍 Scraping Graduate Programs from Rozee HTML...")
+    try:
+        url = "https://www.rozee.pk/job/jsearch/q/internship/fc/1"
+        res = requests.get(url, headers=HEADERS, timeout=15)
+        soup = BeautifulSoup(res.text, "html.parser")
+        cards = soup.select(".job-title-wrap, .r3, .jtitle")
+        for card in cards[:20]:
+            try:
+                title_el = card.select_one("a")
+                title_text = title_el.text.strip() if title_el else ""
+                apply_url = "https://www.rozee.pk" + title_el["href"] if title_el and title_el.get("href") else ""
+                if not title_text or not apply_url:
+                    continue
+                save_job(build_job(title_text, "Unknown", "Pakistan", apply_url, "Rozee Internships", "internship"))
+            except Exception as e:
+                print(f"  ⚠ Error: {e}")
+    except Exception as e:
+        print(f"❌ Rozee internship error: {e}")
 
 # ══════════════════════════════════════════════════════════
 # SCRAPER 4 — LinkedIn Public Pakistan
